@@ -1,24 +1,40 @@
-import logging
+import uuid
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
+import logging
 import azure.functions as func
+from azure.cosmos import CosmosClient
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
+    uid = uuid.uuid4()
 
-    name = req.params.get('name')
-    if not name:
-        try:
-            req_body = req.get_json()
-        except ValueError:
-            pass
-        else:
-            name = req_body.get('name')
+    url = os.environ['ACCOUNT_URI']
+    key = os.environ['ACCOUNT_KEY']
+    client = CosmosClient(url, credential=key)
+    database_name = 'ToDoDB'
+    database = client.get_database_client(database_name)
+    container_name = 'Actions'
+    container = database.get_container_client(container_name)
 
-    if name:
-        return func.HttpResponse(f"Hello, {name}. This HTTP triggered function executed successfully.")
-    else:
+    try:
+        req_body = req.get_json()
+        title = req_body.get('title')
+
+        container.upsert_item({
+            'id': str(uid),
+            'title': title,
+            'location': 'SouthAfrica',
+            'complete': False
+        })
+
         return func.HttpResponse(
-             "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.",
-             status_code=200
+            "Saved",
+            status_code=201
         )
+
+    except Exception:
+        return func.HttpResponse("Error", status_code=500)
